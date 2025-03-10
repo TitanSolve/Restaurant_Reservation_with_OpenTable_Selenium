@@ -18,7 +18,6 @@ from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException, InvalidElementStateException
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-from webdriver_manager.chrome import ChromeDriverManager
 
 # Define Mexico City timezone
 MEXICO_TZ = pytz.timezone("America/Mexico_City")
@@ -28,13 +27,6 @@ class MexicoTimeFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created, tz=MEXICO_TZ)
         return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S %Z")
-    
-def get_ordinal_suffix(day: int) -> str:
-    """Returns the ordinal suffix for a given day."""
-    if 11 <= day <= 13:  # Handle 11th, 12th, 13th as special cases
-        return "th"
-    last_digit = day % 10
-    return {1: "st", 2: "nd", 3: "rd"}.get(last_digit, "th")
 
 # Log format and date format
 log_format = "%(asctime)s %(levelname)s: %(message)s"
@@ -62,36 +54,17 @@ logger.info("This log should show Mexico City time.")
 
 def generate_random_email():
     domains = ["gmail.com", "yahoo.com", "outlook.com", "example.com"]
-    
     username_length = random.randint(8, 12)
     username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=username_length))
-
     domain = random.choice(domains)    
     return f"{username}@{domain}"
 
 def time_difference_in_minutes(time1, time2):
-    fmt = "%H:%M"
+    fmt = "%I:%M %p"
     t1 = datetime.strptime(time1, fmt)
     t2 = datetime.strptime(time2, fmt)
-
     diff = abs((t2 - t1).total_seconds()) // 60
     return int(diff)
-
-def find_nearest_times(date_arr, date_cur):
-    date_cur = datetime.strptime(date_cur, "%H:%M")
-    date_arr = sorted([datetime.strptime(t, "%H:%M") for t in date_arr])
-    
-    before = None
-    after = None
-    
-    for time in date_arr:
-        if time <= date_cur:
-            before = time.strftime("%H:%M")
-        elif time > date_cur and after is None:
-            after = time.strftime("%H:%M")
-            break
-    
-    return before, after
 
 def create_proxy_auth_extension(proxy_host, proxy_port, proxy_username, proxy_password, scheme='http'):
     """
@@ -100,7 +73,6 @@ def create_proxy_auth_extension(proxy_host, proxy_port, proxy_username, proxy_pa
     """
     try:
         logger.info("Starting proxy authentication extension creation.")
-
         manifest_json = """
         {
             "version": "1.0.0",
@@ -150,18 +122,13 @@ def create_proxy_auth_extension(proxy_host, proxy_port, proxy_username, proxy_pa
             ["blocking"]
         );
         """
-
         plugin_file = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-
         with zipfile.ZipFile(plugin_file, 'w') as zp:
             zp.writestr("manifest.json", manifest_json.strip())
             zp.writestr("background.js", background_js.strip())
-
         plugin_file.close()
-
         logger.info("Successfully created proxy authentication extension at: %s", plugin_file.name)
         return plugin_file.name
-
     except Exception as e:
         logger.critical("Failed to create proxy authentication extension: %s", e, exc_info=True)
         return None
@@ -174,15 +141,13 @@ def setup_driver(browser_url="",
                  proxy_scheme="http"):
     """
     Initialize a Chrome webdriver with options optimized for speed.
-    If proxy settings are provided (using Oxylabs), the proxy is configured.
+    If proxy settings are provided, the proxy is configured.
     """
     logger.info("Starting driver setup.")
-
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--window-size=1920,1080")
     options.page_load_strategy = "eager"
-
     prefs = {
         "profile.managed_default_content_settings.images": 2,
         "profile.managed_default_content_settings.stylesheets": 2,
@@ -190,8 +155,6 @@ def setup_driver(browser_url="",
         "profile.managed_default_content_settings.plugins": 2,
     }
     options.add_experimental_option("prefs", prefs)
-
-    # Configure proxy if details are provided
     if proxy_host and proxy_port:
         try:
             if proxy_username and proxy_password:
@@ -204,8 +167,6 @@ def setup_driver(browser_url="",
         except Exception as e:
             logger.critical("Failed to configure proxy: %s", e, exc_info=True)
             raise
-
-    # Initialize WebDriver
     try:
         if browser_url:
             logger.info("Initializing remote WebDriver at URL: %s", browser_url)
@@ -217,8 +178,6 @@ def setup_driver(browser_url="",
     except WebDriverException as e:
         logger.critical("WebDriver initialization failed.", exc_info=True)
         raise e
-
-    # Configure Chrome DevTools Protocol (CDP) to block unnecessary resources
     try:
         driver.execute_cdp_cmd("Network.enable", {})
         driver.execute_cdp_cmd(
@@ -236,7 +195,6 @@ def setup_driver(browser_url="",
         logger.info("CDP block list configured successfully.")
     except Exception as e:
         logger.warning("Error setting CDP block list: %s", e, exc_info=True)
-
     driver.set_page_load_timeout(20)
     # try:
     #     logger.info("Checking public IP address...")
@@ -249,11 +207,6 @@ def setup_driver(browser_url="",
     return driver
 
 def find_element_with_timing(driver, by, xpath, description):
-    """
-    Attempts to find an element with timing and detailed logging.
-    
-    Logs the time taken and whether the search was successful or failed.
-    """
     start = time.perf_counter()
     try:
         element = driver.find_element(by, xpath)
@@ -275,21 +228,14 @@ def find_element_with_timing(driver, by, xpath, description):
         raise
 
 def find_elements_with_timing(driver, by, xpath, description):
-    """
-    Attempts to find multiple elements with timing and detailed logging.
-    
-    Logs the time taken and whether the search was successful or failed.
-    """
     start = time.perf_counter()
     try:
         elements = driver.find_elements(by, xpath)
         elapsed = time.perf_counter() - start
-
         if elements:
             logger.info("SUCCESS: Found %d '%s' elements (xpath: '%s') in %.4f seconds.", len(elements), description, xpath, elapsed)
         else:
             logger.warning("WARNING: No elements found for '%s' (xpath: '%s') in %.4f seconds.", description, xpath, elapsed)
-        
         return elements
     except NoSuchElementException:
         elapsed = time.perf_counter() - start
@@ -306,49 +252,22 @@ def find_elements_with_timing(driver, by, xpath, description):
         raise
 
 def convert_to_am_pm(hour: int, minute: int) -> str:
-    """
-    Converts 24-hour time to 12-hour AM/PM format.
-    
-    Args:
-        hour (int): The hour (0-23).
-        minute (int): The minute (0-59).
-    
-    Returns:
-        str: Time in AM/PM format (e.g., "3:45 pm").
-    
-    Raises:
-        ValueError: If hour or minute values are invalid.
-    """
     if not isinstance(hour, int) or not (0 <= hour < 24):
         logger.error("Invalid hour: %s. Must be between 0 and 23.", hour)
         raise ValueError(f"Invalid hour {hour}. Must be between 0 and 23.")
-    
     if not isinstance(minute, int) or not (0 <= minute < 60):
         logger.error("Invalid minute: %s. Must be between 0 and 59.", minute)
         raise ValueError(f"Invalid minute {minute}. Must be between 0 and 59.")
-
     am_pm_time = (
         f"12:{minute:02d} am" if hour == 0 else
         f"{hour}:{minute:02d} am" if hour < 12 else
         f"12:{minute:02d} pm" if hour == 12 else
         f"{hour - 12}:{minute:02d} pm"
     )
-    
     logger.info("Converted time: %02d:%02d -> %s", hour, minute, am_pm_time)
     return am_pm_time
 
-
 def validate_date(date_str: str, fmt: str = "%Y-%m-%d"):
-    """
-    Validates whether a given date string matches the expected format.
-    
-    Args:
-        date_str (str): The date string.
-        fmt (str): The expected date format (default: "%Y-%m-%d").
-    
-    Raises:
-        ValueError: If the date format is incorrect.
-    """
     try:
         datetime.strptime(date_str, fmt)
         logger.info("Date validation successful: '%s' matches format '%s'.", date_str, fmt)
@@ -357,31 +276,13 @@ def validate_date(date_str: str, fmt: str = "%Y-%m-%d"):
         raise ValueError(f"Invalid date '{date_str}'. Expected format {fmt}. Error: {e}")
 
 def validate_reservation_date(date: str, hour: int, minute: int) -> bool:
-    """
-    Validates whether the given date and time is in the future.
-
-    Args:
-        date (str): The date in 'YYYY-MM-DD' format.
-        hour (int): The hour in 24-hour format.
-        minute (int): The minute (0-59).
-
-    Returns:
-        bool: True if the date and time is in the future, False otherwise.
-    """
-    # Convert input date and time to a datetime object
     input_datetime = datetime.strptime(date, "%Y-%m-%d").replace(hour=hour, minute=minute)
-
-    # Get current date and time
     now = datetime.now()
-
-    # Return True if input date is in the future, False if it's in the past
     return input_datetime > now
 
 def receiving_reservation(driver_local, first_name_local, last_name_local, mobil_number_local, email_local, special_requests_local=None):
     overall_start = time.perf_counter()
     logger.info("Starting reservation process...")
-
-    # Locate form fields
     try:
         firstName = driver_local.find_element(By.XPATH, "//input[contains(@name, 'firstName')]")
         firstName.send_keys(first_name_local)
@@ -391,7 +292,6 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         msg = f"One or more form fields not found: {e}"
         logger.error(msg)
         return False, msg
-    
     try:
         lastName = driver_local.find_element(By.XPATH, "//input[contains(@name, 'lastName')]")
         lastName.send_keys(last_name_local)
@@ -401,7 +301,6 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         msg = f"One or more form fields not found: {e}"
         logger.error(msg)
         return False, msg
-    
     try:
         phoneNumber = driver_local.find_element(By.XPATH, "//input[contains(@name, 'phoneNumber')]")
         phoneNumber.send_keys(mobil_number_local)
@@ -411,18 +310,15 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         msg = f"One or more form fields not found: {e}"
         logger.error(msg)
         return False, msg
-    
     try:
         email = driver_local.find_element(By.XPATH, "//input[contains(@name, 'email')]")
         email.send_keys(email_local)
-        # email.send_keys({generate_random_email()})
         email.send_keys(Keys.RETURN)
         logger.info("Successfully filled Email field.")
     except NoSuchElementException as e:
         msg = f"One or more form fields not found: {e}"
         logger.error(msg)
         return False, msg
-    
     try:
         textUpdatesCheckbox = driver_local.find_element(By.XPATH, "//input[contains(@name, 'optInSmsNotifications')]")
         textUpdatesCheckbox.click()
@@ -442,7 +338,7 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         logger.error(msg)
         return False, msg
     try:
-        timeConformButton = WebDriverWait(driver_local, 10).until(
+        timeConformButton = WebDriverWait(driver_local, 3).until(
             EC.element_to_be_clickable((By.XPATH, "//button[@role='link']"))
         )
         timeConformButton.click()
@@ -451,7 +347,6 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         msg = "Time conform button not clickable in time."
         logger.error(msg)
         return False, msg
-    
     cancelReservationLinkTag = WebDriverWait(driver_local, 3).until(
         EC.element_to_be_clickable((By.XPATH, "//a[contains(@data-auto, 'cancelReservationLink')]"))
     )
@@ -460,8 +355,8 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
     cancel_rid = cancelReservationLink.split("?")[1].split("&")[0].split("=")[1]
     cancel_confnumber = cancelReservationLink.split("?")[1].split("&")[1].split("=")[1]
     cancel_reservationToken = cancelReservationLink.split("?")[1].split("&")[2].split("=")[1]
-    cancel_restref          = cancelReservationLink.split("?")[1].split("&")[3].split("=")[1]
-    cancel_lang             = cancelReservationLink.split("?")[1].split("&")[4].split("=")[1]
+    cancel_restref = cancelReservationLink.split("?")[1].split("&")[3].split("=")[1]
+    cancel_lang = cancelReservationLink.split("?")[1].split("&")[4].split("=")[1]
     cancelReservationURL = (
         "https://www.opentable.com/booking/view?showCancelModal=true&rid=" + cancel_rid +
         "&confnumber=" + cancel_confnumber +
@@ -469,18 +364,18 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
         "&restref=" + cancel_restref +
         "&lang=" + cancel_lang
     )
-
+    print(f"cancelReservationURL={cancelReservationURL}")
     logger.info("Captured cancel reservation URL successfully. URL: %s", cancelReservationURL)
     modifyReservationLinkTag = WebDriverWait(driver_local, 3).until(
         EC.element_to_be_clickable((By.XPATH, "//a[contains(@data-auto, 'modifyReservationLink')]"))
     )
     modifyReservationLink = modifyReservationLinkTag.get_attribute("href")
-    
+    print(f"modifyReservationLink={modifyReservationLink}")
     logger.info("Captured modify reservation link successfully. URL: %s", modifyReservationLink)
     try:
         start = time.perf_counter()
-        modify_rid              = modifyReservationLink.split("?")[1].split("&")[0].split("=")[1]
-        modify_confnumber       = modifyReservationLink.split("?")[1].split("&")[1].split("=")[1]
+        modify_rid = modifyReservationLink.split("?")[1].split("&")[0].split("=")[1]
+        modify_confnumber = modifyReservationLink.split("?")[1].split("&")[1].split("=")[1]
         modify_reservationToken = modifyReservationLink.split("?")[1].split("&")[2].split("=")[1]
         modify_lang = modifyReservationLink.split("?")[1].split("&")[3].split("=")[1]
         modifyReservationURL = (
@@ -495,8 +390,8 @@ def receiving_reservation(driver_local, first_name_local, last_name_local, mobil
     except Exception as e:
         logger.error("Failed to capture modify reservation URL. Error: %s", e)
         return False, f"Error: {e}"
-    confirmation_url = cancelReservationURL
-    logger.info("Reservation created successfully. CancelReservation URL: %s", confirmation_url)
+    confirmation_url = modifyReservationURL
+    logger.info("Reservation created successfully. Confirmation URL: %s", confirmation_url)
     total_elapsed = time.perf_counter() - overall_start
     logger.info("Total time in receiving_reservation: %.4f seconds", total_elapsed)
     return True, confirmation_url
@@ -510,7 +405,7 @@ def make_reservation_external(
     last_name: str = 'albalb',
     phone_number: str = '+12543252381',
     email: str = 'jato.ft2@gmail.com',
-    restaurant_id: str = 'https://www.opentable.com/restref/client?rid=1328581&restref=1328581&partysize=2&datetime=2025-03-04T19%3A00&lang=en-US&r3uid=ATDC2IO_2-&color=1&modal=true',
+    restaurant_id: str = 'https://www.nomichicago.com/',
     browser_url: str = "",
     proxy_host: str = None,
     proxy_port: int = None,
@@ -541,219 +436,288 @@ def make_reservation_external(
         )
         
         try:
-            # driver = setup_driver(browser_url, proxy_host, proxy_port, proxy_username, proxy_password, proxy_scheme)
-            chrome_options = webdriver.ChromeOptions()
-            chrome_options.add_argument("--disable-popup-blocking")
-            chrome_options.add_argument("--disable-notifications")
-            chrome_options.add_argument("--disable-infobars")
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-            driver.set_window_size(1300, 1070)
+            driver = setup_driver(browser_url, proxy_host, proxy_port, proxy_username, proxy_password, proxy_scheme)
             logger.info("WebDriver initialized successfully.")
         except WebDriverException as e:
             logger.exception("WebDriver initialization failed.")
             return (False, None, None, f"WebDriver error: {e}")
-
-        try:
-            if make_booking:
-                logger.info("Checking reservation availability for booking...")
-            else:
-                logger.info("Checking reservation availability (no booking attempt)...")
-            reservation_link = restaurant_id
-            logger.info("Navigating to reservation link: %s", reservation_link)
-            start = time.perf_counter()
-            driver.get(reservation_link)
-            elapsed = time.perf_counter() - start
-            logger.info("Navigation completed in %.4f seconds", elapsed)
-            logger.info("Setting up party size... ")
-            start = time.perf_counter()
-            try:
-                partySizePicker = driver.find_element(By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]")
-            except TimeoutException:
-                logger.error("Party size picker not found within the timeout period.")
-                return (False, None, None, "Party size picker not found.")
-                        
-            try:
-                select_partySize = Select(partySizePicker)
-                select_partySize.select_by_value(f"{party_size}")
-            except Exception as e:
-                logger.error("Error selecting party size: %s", e)
-                return (False, None, None, f"Error selecting party size: {e}")  
-            
-            elapsed = time.perf_counter() - start
-            logger.info("Party size set up in %.4f seconds", elapsed)
-            
-            
-            logger.info("Setting up party date: %s", date)
-            start = time.perf_counter()
-            try:
-                datePicker = WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.XPATH, "//input[contains(@data-auto, 'calendarDatePicker')]"))
-                )
-                datePicker.click()                    
-                calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
-                monthName = datetime.strptime(date, "%Y-%m-%d").strftime("%B")
-                while monthName not in calendarHeader.text:
-                    nextMonthButton = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Next Month')]")
-                    nextMonthButton.click()
-                    calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
-                
-                day = datetime.strptime(date, "%Y-%m-%d").day
-                ordinal_suffix = get_ordinal_suffix(day)
-                dayButton = driver.find_element(By.XPATH, f"//div[contains(@aria-label, '{monthName} {day}{ordinal_suffix}, {datetime.strptime(date, '%Y-%m-%d').year}')]")
-                dayButton.click()
-            
-            except TimeoutException:
-                logger.error("Date picker not found within the timeout period.")
-                return (False, None, None, "Date picker not found.")
-            
-            requested_time = f"{hour:02d}:{minute:02d}"
-            
-            logger.info("Setting up party time: %s", requested_time)
-            start = time.perf_counter()
-            try:
-                timePicker = WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
-                )
-            except TimeoutException:
-                logger.error("Time picker not found within the timeout period.")
-                return (False, None, None, "Time picker not found.")
-            
-            nearestTimeBeforeValue = None
-            nearestTimeAfterValue = None
-            min_diff = int(99999999)
-            cur_idx = -1
-            total_idx = -1
-            nearestTime_option = None
-            isExactTimeAvailable = False
-            try:    
-                select_partyTime = Select(timePicker)
-                available_values = [option.get_attribute("value") for option in select_partyTime.options]
-                option_exists = requested_time in available_values
-                nearestTime_option = available_values[0]
-                if option_exists == True:
-                    select_partyTime.select_by_value(f"{requested_time}")
-                    isExactTimeAvailable = True
-                else:
-                    for option in available_values:
-                        total_idx += 1
-                        if time_difference_in_minutes(requested_time, option) < min_diff:
-                            nearestTime_option = option
-                            min_diff = time_difference_in_minutes(requested_time, option)
-                            cur_idx = total_idx
-                            
-                    print(f"cur_idx = {cur_idx}, nearestTime_option = {nearestTime_option}")
-                    select_partyTime.select_by_value(f"{nearestTime_option}")
-            except Exception as e:
-                logger.error("Error selecting party time: %s", e)
-                return (False, None, None, f"Error selecting party time: {e}")
-            
-            elapsed = time.perf_counter() - start
-            logger.info("Party time set up in %.4f seconds", elapsed)
-            
-            logger.info("Locating availability button... ")
-            start = time.perf_counter()
-            findingTable_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
-            )
-            findingTable_button.click()
-            elapsed = time.perf_counter() - start
-            logger.info("Clicked finding table button in %.4f seconds", elapsed)
-            
-            availabilityButtons = []
-            
-            try:
-                div_buttons = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//ul[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]"))
-                )
-                
-                WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, ".//button[contains(@role, 'link')]"))
-                )
-                
-                availabilityButtons = div_buttons.find_elements(By.XPATH, ".//button[contains(@role, 'link')]")
-                logger.info("Found %d availability buttons.", len(availabilityButtons))
-            except Exception as e:
-                logger.error("Availability buttons not found within the wait period.")
-                return (False, None, None, "Availability buttons not found.")
-            
-            exact_slot = None
-            isExact = False
-            isEmptyTimeButton = True
-    
-            allAvailabilityTimes = []
-
-            exactTime = convert_to_am_pm( int(requested_time.split(":")[0]), int(requested_time.split(":")[1]) )
-            
-            for button in availabilityButtons:
-                if button.text == exactTime:
-                    exact_slot = button
-                    isEmptyTimeButton = False
-                    isExact = True
-                    break
-            if isExact == False:
-                isExactTimeAvailable = False
-    
-            #   ===== isExactTimeAvailable = False =========
-            if isExactTimeAvailable == False:
-                for button in availabilityButtons:
-                    if button.text != "" and "tify" not in button.text:
-                        time_button = datetime.strptime(button.text, "%I:%M %p").strftime("%H:%M")
-                        allAvailabilityTimes.append(time_button)
-                        
-                nearestTimeBeforeValue, nearestTimeAfterValue = find_nearest_times(allAvailabilityTimes, requested_time)
-                        
-                nearestTime_string = f"Closet time before = {nearestTimeBeforeValue}, Closet time after = {nearestTimeAfterValue}"
-                return (False, None, None, f"Exact time not available. {nearestTime_string}")
-            #   ============================================
-            
-            if make_booking == False:
-                total_elapsed = time.perf_counter() - overall_start
-                logger.info("Total process time: %.4f seconds", total_elapsed)
-                return (True, None, None, "Exact time available but booking not attempted (make_booking is False).")
-                
-            if isEmptyTimeButton or exact_slot is None:
-                return (False, None, None, "No availability available")
         
-            logger.info("Selected availability: %s", exact_slot.text)
-            exact_slot.click()
-            
+        if make_booking:
             try:
-                WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, "button[text()='Select']]"))
-                )
+                logger.info("Checking reservation availability for booking...")
+                reservation_link = restaurant_id
+                logger.info("Navigating to reservation link: %s", reservation_link)
+                start = time.perf_counter()
+                driver.get(reservation_link)
+                elapsed = time.perf_counter() - start
+                logger.info("Navigation completed in %.4f seconds", elapsed)
                 
-                reservationSelectButton = WebDriverWait(driver, 20).until(
+                logger.info("Redirecting to OpenTable... ")
+                start = time.perf_counter()
+                element = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@href, 'opentable')]"))
+                )
+                element.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Redirecting completed in %.4f seconds", elapsed)
+        
+                driver.switch_to.window(driver.window_handles[-1])
+        
+                logger.info("Setting up party size... ")
+                start = time.perf_counter()
+                try:
+                    partySizePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Party size picker not found within the timeout period.")
+                    return (False, None, None, "Party size picker not found.")
+                            
+                try:
+                    select_partySize = Select(partySizePicker)
+                    select_partySize.select_by_value(f"{party_size}")
+                except Exception as e:
+                    logger.error("Error selecting party size: %s", e)
+                    return (False, None, None, f"Error selecting party size: {e}")  
+             
+                elapsed = time.perf_counter() - start
+                logger.info("Party size set up in %.4f seconds", elapsed)
+        
+                if minute < 30:
+                    requested_time = f"{hour:02d}:00"
+                else:
+                    requested_time = f"{hour:02d}:30"
+                
+                logger.info("Setting up party time: %s", requested_time)
+                start = time.perf_counter()
+                try:
+                    timePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Time picker not found within the timeout period.")
+                    return (False, None, None, "Time picker not found.")
+                            
+                try:    
+                    select_partyTime = Select(timePicker)
+                    option_exists = any(option.get_attribute("value") == requested_time for option in select_partyTime.options)
+                    if option_exists:
+                        select_partyTime.select_by_value(f"{requested_time}")
+                except Exception as e:
+                    logger.error("Error selecting party time: %s", e)
+                    return (False, None, None, f"Error selecting party time: {e}")
+                
+                elapsed = time.perf_counter() - start
+                logger.info("Party time set up in %.4f seconds", elapsed)
+                
+                logger.info("Locating availability button... ")
+                start = time.perf_counter()
+                findingTable_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+                )
+                findingTable_button.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Clicked finding table button in %.4f seconds", elapsed)
+                
+                try:
+                    availabilityButtons = WebDriverWait(driver, 10).until(
+                        EC.presence_of_all_elements_located((By.XPATH, "//button[contains(@role, 'link')]"))
+                    )
+                    logger.info("Found %d availability buttons.", len(availabilityButtons))
+                except TimeoutException:
+                    logger.error("Availability buttons not found within the wait period.")
+                    return (False, None, None, "Availability buttons not found.")
+                
+                exact_slot = None
+                nearestTime = 0
+                isEmptyTimeButton = True
+                
+                for button in availabilityButtons:  
+                    if button.text != "":
+                        nearestTime = time_difference_in_minutes(requested_am_pm, button.text)
+                        isEmptyTimeButton = False
+                        exact_slot = button
+                        break
+        
+                logger.info("Total availability buttons found: %d", len(availabilityButtons))
+        
+                for button in availabilityButtons:  
+                    if button.text == requested_am_pm:
+                        exact_slot = button
+                        isEmptyTimeButton = False
+                        break
+                    elif button.text != "" and "tify" not in button.text:
+                        minutes = time_difference_in_minutes(requested_am_pm, button.text)
+                        logger.info("Button text: %s, diff minutes: %d, current nearest: %d", button.text, minutes, nearestTime)
+                        if nearestTime > minutes:
+                            nearestTime = minutes
+                            exact_slot = button
+                            isEmptyTimeButton = False
+                            logger.info("New nearest time: %s", button.text)
+                            
+                if isEmptyTimeButton or exact_slot is None:
+                    return (False, None, None, "No availability available")
+                
+                logger.info("Selected availability: %s", exact_slot.text)
+                exact_slot.click()
+                
+                reservationSelectButton = WebDriverWait(driver, 3).until(
                     EC.element_to_be_clickable((By.XPATH, "//button[text()='Select']"))
                 )
                 reservationSelectButton.click()
-            except Exception as e:
-                logger.error("Error selecting reservation: %s", e)
+                
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'firstName')]"))
+                )
             
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'firstName')]"))
-            )
-        
-            error_msg = ""
-            try:
-                booking_result, booking_info = receiving_reservation(driver, first_name, last_name, phone_number, email)
-                if booking_result:
-                    booked = True
-                    confirmation_url = booking_info
-                    logger.info("Booking successful. CancelReservation URL: %s", confirmation_url)
-                else:
-                    error_msg = booking_info
-                    logger.error("Booking failed: %s", error_msg)
+                try:
+                    booking_result, booking_info = receiving_reservation(driver, first_name, last_name, phone_number, email)
+                    if booking_result:
+                        booked = True
+                        confirmation_url = booking_info
+                        logger.info("Booking successful. Confirmation URL: %s", confirmation_url)
+                    else:
+                        error_msg = booking_info
+                        logger.error("Booking failed: %s", error_msg)
+                except Exception as e:
+                    logger.exception("Unexpected error during reservation process")
+                    return (False, None, None, f"Unexpected error: {e}")
+            
+                total_elapsed = time.perf_counter() - overall_start
+                logger.info("Total booking process time: %.4f seconds", total_elapsed)
+                return (booked, confirmation_url if booked else None, None, error_msg)
             except Exception as e:
-                logger.exception("Unexpected error during reservation process")
+                logger.exception("Unexpected error during booking process")
                 return (False, None, None, f"Unexpected error: {e}")
+        else:
+            try:
+                logger.info("Checking reservation availability (no booking attempt)...")
+                reservation_link = restaurant_id
+                logger.info("Navigating to reservation link: %s", reservation_link)
+                start = time.perf_counter()
+                driver.get(reservation_link)
+                elapsed = time.perf_counter() - start
+                logger.info("Navigation completed in %.4f seconds", elapsed)
+                
+                logger.info("Redirecting to OpenTable... ")
+                start = time.perf_counter()
+                element = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@href, 'opentable')]"))
+                )
+                element.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Redirecting completed in %.4f seconds", elapsed)
         
-            total_elapsed = time.perf_counter() - overall_start
-            logger.info("Total booking process time: %.4f seconds", total_elapsed)
-            return (booked, confirmation_url if booked else None, None, error_msg)
-        except Exception as e:
-            logger.exception("Unexpected error during booking process")
-            return (False, None, None, f"Unexpected error: {e}")
+                driver.switch_to.window(driver.window_handles[-1])
         
+                logger.info("Setting up party size... ")
+                start = time.perf_counter()
+                try:
+                    partySizePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Party size picker not found within the timeout period.")
+                    return (False, None, None, "Party size picker not found.")
+                            
+                try:
+                    select_partySize = Select(partySizePicker)
+                    select_partySize.select_by_value(f"{party_size}")
+                except Exception as e:
+                    logger.error("Error selecting party size: %s", e)
+                    return (False, None, None, f"Error selecting party size: {e}")
+             
+                elapsed = time.perf_counter() - start
+                logger.info("Party size set up in %.4f seconds", elapsed)
+        
+                if minute < 30:
+                    requested_time = f"{hour:02d}:00"
+                else:
+                    requested_time = f"{hour:02d}:30"
+                
+                logger.info("Setting up party time: %s", requested_time)
+                start = time.perf_counter()
+                try:
+                    timePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Time picker not found within the timeout period.")
+                    return (False, None, None, "Time picker not found.")
+                            
+                try:    
+                    select_partyTime = Select(timePicker)
+                    option_exists = any(option.get_attribute("value") == requested_time for option in select_partyTime.options)
+                    if option_exists:
+                        select_partyTime.select_by_value(f"{requested_time}")
+                except Exception as e:
+                    logger.error("Error selecting party time: %s", e)
+                    return (False, None, None, f"Error selecting party time: {e}")
+                
+                elapsed = time.perf_counter() - start
+                logger.info("Party time set up in %.4f seconds", elapsed)
+                
+                logger.info("Locating availability button... ")
+                start = time.perf_counter()
+                findingTable_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+                )
+                findingTable_button.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Clicked finding table button in %.4f seconds", elapsed)
+                
+                try:
+                    availabilityButtons = WebDriverWait(driver, 10).until(
+                        EC.presence_of_all_elements_located((By.XPATH, "//button[contains(@role, 'link')]"))
+                    )
+                    logger.info("Found %d availability buttons.", len(availabilityButtons))
+                except TimeoutException:
+                    logger.error("Availability buttons not found within the wait period.")
+                    return (False, None, None, "Availability buttons not found.")
+                
+                exact_slot = None
+                nearestTime = 0
+                isEmptyTimeButton = True
+                
+                for button in availabilityButtons:  
+                    if button.text != "":
+                        nearestTime = time_difference_in_minutes(requested_am_pm, button.text)
+                        isEmptyTimeButton = False
+                        exact_slot = button
+                        break
+        
+                logger.info("Total availability buttons found: %d", len(availabilityButtons))
+        
+                for button in availabilityButtons:  
+                    if button.text == requested_am_pm:
+                        exact_slot = button
+                        isEmptyTimeButton = False
+                        break
+                    elif button.text != "" and "tify" not in button.text:
+                        minutes = time_difference_in_minutes(requested_am_pm, button.text)
+                        if nearestTime > minutes:
+                            nearestTime = minutes
+                            exact_slot = button
+                            isEmptyTimeButton = False
+                            
+                if isEmptyTimeButton or exact_slot is None:
+                    return (False, None, None, "No availability available")
+                
+                alternativeTime = exact_slot.text
+                logger.info("Nearest availability: %s", alternativeTime)
+                
+                if alternativeTime != requested_am_pm:
+                    alt_times_str = f"Alternative times available: {alternativeTime}"
+                    logger.info(alt_times_str)
+                else:
+                    logger.info("Exact time available but booking not attempted (make_booking is False).")
+                    
+                total_elapsed = time.perf_counter() - overall_start
+                logger.info("Total process time: %.4f seconds", total_elapsed)
+                return (True, None, None, None)
+            except Exception as e:
+                logger.exception("Unexpected error during availability checking process:")
+                return (False, None, None, f"Unexpected error: {e}")
     finally:
         if driver is not None:
             driver.quit()
@@ -793,7 +757,7 @@ def cancel_reservation(cancel_url: str = ""):
         return (False, f"Unexpected error: {str(e)}")
     try:
         element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//h1[contains(text(), 'canceled')]"))
+            EC.presence_of_element_located((By.XPATH, "//h1[contains(text(), 'has canceled your reservation')]"))
         )
         elapsed = time.perf_counter() - start
         logger.info("Cancel reservation message visible in %.4f seconds", elapsed)
@@ -807,7 +771,6 @@ def cancel_reservation(cancel_url: str = ""):
         return (False, f"Unexpected error: {str(e)}")
 
 if __name__ == '__main__':
-    
     # Oxylabs Proxy Configuration (masked for security)
     OX_PROXY_HOST = "pr.oxylabs.io"         # Use the Oxylabs proxy host as given.
     OX_PROXY_PORT = 7777                    # Use port 7777 as in the endpoint examples.
@@ -816,16 +779,14 @@ if __name__ == '__main__':
     
     # Optionally, set proxy_scheme to "http" or "socks5h" if needed.
     PROXY_SCHEME = "http"                   # or "socks5h"
-
-    # Oxylabs Proxy Configuration (masked for security)
     BROWSER_URL = ""
-    RESTAURANT_ID = "https://www.opentable.com/restref/client?rid=1328581&restref=1328581&partysize=2&datetime=2025-03-04T19%3A00&lang=en-US&r3uid=ATDC2IO_2-&color=1&modal=true"
-
+    RESTAURANT_ID = "https://www.nomichicago.com/"
+    
     result = make_reservation_external(
-        date="2025-05-12",
-        hour=17,
-        minute=30,
-        party_size="7",
+        date="2025-03-27",
+        hour=15,
+        minute=15,
+        party_size="4",
         first_name="bvvdlabsdlasd",
         last_name="alsdbavsdlb",
         email="tesht2137j56476@dinedaiserver.online",
@@ -842,7 +803,8 @@ if __name__ == '__main__':
     )
     logger.info("Result: %s", result)
 
+    # Example for cancellation (currently commented out)
     # result = cancel_reservation(
-    #     cancel_url= "https://www.opentable.com/booking/view?showCancelModal=true&rid=1021735&confnumber=239411&token=01VQWvJuG3TANO3DCLzhFE5osCVzMVwKpxE5TU_hljI441&restref=1021735&lang=en-US"
+    #     cancel_url="https://www.opentable.com/booking/view?showCancelModal=true&rid=1479&confnumber=2110753618&token=01nlhlzf-zsAanan4SS9L-oKtveMINnBzjd2zpaUAWp6k1&restref=1479&lang=en-US"
     # )
     # logger.info("Result: %s", result)

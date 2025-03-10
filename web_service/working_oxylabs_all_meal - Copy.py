@@ -552,208 +552,365 @@ def make_reservation_external(
         except WebDriverException as e:
             logger.exception("WebDriver initialization failed.")
             return (False, None, None, f"WebDriver error: {e}")
-
-        try:
-            if make_booking:
+        
+        if make_booking:
+            try:
                 logger.info("Checking reservation availability for booking...")
-            else:
-                logger.info("Checking reservation availability (no booking attempt)...")
-            reservation_link = restaurant_id
-            logger.info("Navigating to reservation link: %s", reservation_link)
-            start = time.perf_counter()
-            driver.get(reservation_link)
-            elapsed = time.perf_counter() - start
-            logger.info("Navigation completed in %.4f seconds", elapsed)
-            logger.info("Setting up party size... ")
-            start = time.perf_counter()
-            try:
-                partySizePicker = driver.find_element(By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]")
-            except TimeoutException:
-                logger.error("Party size picker not found within the timeout period.")
-                return (False, None, None, "Party size picker not found.")
-                        
-            try:
-                select_partySize = Select(partySizePicker)
-                select_partySize.select_by_value(f"{party_size}")
-            except Exception as e:
-                logger.error("Error selecting party size: %s", e)
-                return (False, None, None, f"Error selecting party size: {e}")  
-            
-            elapsed = time.perf_counter() - start
-            logger.info("Party size set up in %.4f seconds", elapsed)
-            
-            
-            logger.info("Setting up party date: %s", date)
-            start = time.perf_counter()
-            try:
-                datePicker = WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.XPATH, "//input[contains(@data-auto, 'calendarDatePicker')]"))
-                )
-                datePicker.click()                    
-                calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
-                monthName = datetime.strptime(date, "%Y-%m-%d").strftime("%B")
-                while monthName not in calendarHeader.text:
-                    nextMonthButton = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Next Month')]")
-                    nextMonthButton.click()
-                    calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
-                
-                day = datetime.strptime(date, "%Y-%m-%d").day
-                ordinal_suffix = get_ordinal_suffix(day)
-                dayButton = driver.find_element(By.XPATH, f"//div[contains(@aria-label, '{monthName} {day}{ordinal_suffix}, {datetime.strptime(date, '%Y-%m-%d').year}')]")
-                dayButton.click()
-            
-            except TimeoutException:
-                logger.error("Date picker not found within the timeout period.")
-                return (False, None, None, "Date picker not found.")
-            
-            requested_time = f"{hour:02d}:{minute:02d}"
-            
-            logger.info("Setting up party time: %s", requested_time)
-            start = time.perf_counter()
-            try:
-                timePicker = WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
-                )
-            except TimeoutException:
-                logger.error("Time picker not found within the timeout period.")
-                return (False, None, None, "Time picker not found.")
-            
-            nearestTimeBeforeValue = None
-            nearestTimeAfterValue = None
-            min_diff = int(99999999)
-            cur_idx = -1
-            total_idx = -1
-            nearestTime_option = None
-            isExactTimeAvailable = False
-            try:    
-                select_partyTime = Select(timePicker)
-                available_values = [option.get_attribute("value") for option in select_partyTime.options]
-                option_exists = requested_time in available_values
-                nearestTime_option = available_values[0]
-                if option_exists == True:
-                    select_partyTime.select_by_value(f"{requested_time}")
-                    isExactTimeAvailable = True
-                else:
-                    for option in available_values:
-                        total_idx += 1
-                        if time_difference_in_minutes(requested_time, option) < min_diff:
-                            nearestTime_option = option
-                            min_diff = time_difference_in_minutes(requested_time, option)
-                            cur_idx = total_idx
+                reservation_link = restaurant_id
+                logger.info("Navigating to reservation link: %s", reservation_link)
+                start = time.perf_counter()
+                driver.get(reservation_link)
+                elapsed = time.perf_counter() - start
+                logger.info("Navigation completed in %.4f seconds", elapsed)
+                logger.info("Setting up party size... ")
+                start = time.perf_counter()
+                try:
+                    partySizePicker = driver.find_element(By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]")
+                except TimeoutException:
+                    logger.error("Party size picker not found within the timeout period.")
+                    return (False, None, None, "Party size picker not found.")
                             
-                    print(f"cur_idx = {cur_idx}, nearestTime_option = {nearestTime_option}")
-                    select_partyTime.select_by_value(f"{nearestTime_option}")
-            except Exception as e:
-                logger.error("Error selecting party time: %s", e)
-                return (False, None, None, f"Error selecting party time: {e}")
-            
-            elapsed = time.perf_counter() - start
-            logger.info("Party time set up in %.4f seconds", elapsed)
-            
-            logger.info("Locating availability button... ")
-            start = time.perf_counter()
-            findingTable_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
-            )
-            findingTable_button.click()
-            elapsed = time.perf_counter() - start
-            logger.info("Clicked finding table button in %.4f seconds", elapsed)
-            
-            availabilityButtons = []
-            
-            try:
-                div_buttons = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//ul[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]"))
+                try:
+                    select_partySize = Select(partySizePicker)
+                    select_partySize.select_by_value(f"{party_size}")
+                except Exception as e:
+                    logger.error("Error selecting party size: %s", e)
+                    return (False, None, None, f"Error selecting party size: {e}")  
+             
+                elapsed = time.perf_counter() - start
+                logger.info("Party size set up in %.4f seconds", elapsed)
+                
+                
+                logger.info("Setting up party date: %s", date)
+                start = time.perf_counter()
+                try:
+                    datePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//input[contains(@data-auto, 'calendarDatePicker')]"))
+                    )
+                    datePicker.click()                    
+                    calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
+                    monthName = datetime.strptime(date, "%Y-%m-%d").strftime("%B")
+                    while monthName not in calendarHeader.text:
+                        nextMonthButton = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Next Month')]")
+                        nextMonthButton.click()
+                        calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
+                    
+                    day = datetime.strptime(date, "%Y-%m-%d").day
+                    ordinal_suffix = get_ordinal_suffix(day)
+                    dayButton = driver.find_element(By.XPATH, f"//div[contains(@aria-label, '{monthName} {day}{ordinal_suffix}, {datetime.strptime(date, '%Y-%m-%d').year}')]")
+                    dayButton.click()
+                
+                except TimeoutException:
+                    logger.error("Date picker not found within the timeout period.")
+                    return (False, None, None, "Date picker not found.")
+                
+                requested_time = f"{hour:02d}:{minute:02d}"
+                
+                logger.info("Setting up party time: %s", requested_time)
+                start = time.perf_counter()
+                try:
+                    timePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Time picker not found within the timeout period.")
+                    return (False, None, None, "Time picker not found.")
+                
+                nearestTimeBeforeValue = None
+                nearestTimeAfterValue = None
+                min_diff = int(99999999)
+                cur_idx = -1
+                total_idx = -1
+                nearestTime_option = None
+                isExactTimeAvailable = False
+                try:    
+                    select_partyTime = Select(timePicker)
+                    available_values = [option.get_attribute("value") for option in select_partyTime.options]
+                    option_exists = requested_time in available_values
+                    nearestTime_option = available_values[0]
+                    if option_exists == True:
+                        select_partyTime.select_by_value(f"{requested_time}")
+                        isExactTimeAvailable = True
+                    else:
+                        for option in available_values:
+                            total_idx += 1
+                            if time_difference_in_minutes(requested_time, option) < min_diff:
+                                nearestTime_option = option
+                                min_diff = time_difference_in_minutes(requested_time, option)
+                                cur_idx = total_idx
+                                
+                        print(f"cur_idx = {cur_idx}, nearestTime_option = {nearestTime_option}")
+                        select_partyTime.select_by_value(f"{nearestTime_option}")
+                except Exception as e:
+                    logger.error("Error selecting party time: %s", e)
+                    return (False, None, None, f"Error selecting party time: {e}")
+                
+                elapsed = time.perf_counter() - start
+                logger.info("Party time set up in %.4f seconds", elapsed)
+                
+                logger.info("Locating availability button... ")
+                start = time.perf_counter()
+                findingTable_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
                 )
+                findingTable_button.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Clicked finding table button in %.4f seconds", elapsed)
+                
+                availabilityButtons = []
+                
+                try:
+                    # div_buttons = driver.find_element(By.XPATH, "//div[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]")
+                    div_buttons = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//ul[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]"))
+                    )
+                    
+                    WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.XPATH, ".//button[contains(@role, 'link')]"))
+                    )
+                    
+                    availabilityButtons = div_buttons.find_elements(By.XPATH, ".//button[contains(@role, 'link')]")
+                    logger.info("Found %d availability buttons.", len(availabilityButtons))
+                except Exception as e:
+                    logger.error("Availability buttons not found within the wait period.")
+                    return (False, None, None, "Availability buttons not found.")
+                
+                exact_slot = None
+                nearestTime = 0
+                isExact = False
+                isEmptyTimeButton = True
+        
+                allAvailabilityTimes = []
+
+                exactTime = convert_to_am_pm( int(requested_time.split(":")[0]), int(requested_time.split(":")[1]) )
+                
+                for button in availabilityButtons:
+                    if button.text == exactTime:
+                        exact_slot = button
+                        isEmptyTimeButton = False
+                        isExact = True
+                        break
+                if isExact == False:
+                    isExactTimeAvailable = False
+        
+                #   ===== isExactTimeAvailable = False =========
+                if isExactTimeAvailable == False:
+                    for button in availabilityButtons:
+                        if button.text != "" and "tify" not in button.text:
+                            time_button = datetime.strptime(button.text, "%I:%M %p").strftime("%H:%M")
+                            allAvailabilityTimes.append(time_button)
+                            
+                    nearestTimeBeforeValue, nearestTimeAfterValue = find_nearest_times(allAvailabilityTimes, requested_time)
+                            
+                    nearestTime_string = f"Closet time before = {nearestTimeBeforeValue}, Closet time after = {nearestTimeAfterValue}"
+                    return (False, None, None, f"Exact time not available. {nearestTime_string}")
+                #   ============================================
+                        
+                if isEmptyTimeButton or exact_slot is None:
+                    return (False, None, None, "No availability available")
+            
+                logger.info("Selected availability: %s", exact_slot.text)
+                exact_slot.click()
+                
+                try:
+                    WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.XPATH, "button[text()='Select']]"))
+                    )
+                    
+                    reservationSelectButton = WebDriverWait(driver, 20).until(
+                        EC.element_to_be_clickable((By.XPATH, "//button[text()='Select']"))
+                    )
+                    reservationSelectButton.click()
+                except Exception as e:
+                    logger.error("Error selecting reservation: %s", e)
                 
                 WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, ".//button[contains(@role, 'link')]"))
+                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'firstName')]"))
                 )
-                
-                availabilityButtons = div_buttons.find_elements(By.XPATH, ".//button[contains(@role, 'link')]")
-                logger.info("Found %d availability buttons.", len(availabilityButtons))
+            
+                error_msg = ""
+                try:
+                    booking_result, booking_info = receiving_reservation(driver, first_name, last_name, phone_number, email)
+                    if booking_result:
+                        booked = True
+                        confirmation_url = booking_info
+                        logger.info("Booking successful. CancelReservation URL: %s", confirmation_url)
+                    else:
+                        error_msg = booking_info
+                        logger.error("Booking failed: %s", error_msg)
+                except Exception as e:
+                    logger.exception("Unexpected error during reservation process")
+                    return (False, None, None, f"Unexpected error: {e}")
+            
+                total_elapsed = time.perf_counter() - overall_start
+                logger.info("Total booking process time: %.4f seconds", total_elapsed)
+                return (booked, confirmation_url if booked else None, None, error_msg)
             except Exception as e:
-                logger.error("Availability buttons not found within the wait period.")
-                return (False, None, None, "Availability buttons not found.")
-            
-            exact_slot = None
-            isExact = False
-            isEmptyTimeButton = True
-    
-            allAvailabilityTimes = []
-
-            exactTime = convert_to_am_pm( int(requested_time.split(":")[0]), int(requested_time.split(":")[1]) )
-            
-            for button in availabilityButtons:
-                if button.text == exactTime:
-                    exact_slot = button
-                    isEmptyTimeButton = False
-                    isExact = True
-                    break
-            if isExact == False:
+                logger.exception("Unexpected error during booking process")
+                return (False, None, None, f"Unexpected error: {e}")
+        else:
+            try:
+                logger.info("Checking reservation availability (no booking attempt)...")
+                reservation_link = restaurant_id
+                logger.info("Navigating to reservation link: %s", reservation_link)
+                start = time.perf_counter()
+                driver.get(reservation_link)
+                elapsed = time.perf_counter() - start
+                logger.info("Navigation completed in %.4f seconds", elapsed)
+        
+                logger.info("Setting up party size... ")
+                start = time.perf_counter()
+                try:
+                    partySizePicker = driver.find_element(By.XPATH, "//select[contains(@data-auto, 'partySizePicker')]")
+                except TimeoutException:
+                    logger.error("Party size picker not found within the timeout period.")
+                    return (False, None, None, "Party size picker not found.")
+                            
+                try:
+                    select_partySize = Select(partySizePicker)
+                    select_partySize.select_by_value(f"{party_size}")
+                except Exception as e:
+                    logger.error("Error selecting party size: %s", e)
+                    return (False, None, None, f"Error selecting party size: {e}")
+             
+                elapsed = time.perf_counter() - start
+                logger.info("Party size set up in %.4f seconds", elapsed)
+        
+                logger.info("Setting up party date: %s", date)
+                start = time.perf_counter()
+                try:
+                    datePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//input[contains(@data-auto, 'calendarDatePicker')]"))
+                    )
+                    datePicker.click()                    
+                    calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
+                    monthName = datetime.strptime(date, "%Y-%m-%d").strftime("%B")
+                    while monthName not in calendarHeader.text:
+                        nextMonthButton = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Next Month')]")
+                        nextMonthButton.click()
+                        calendarHeader = driver.find_element(By.CLASS_NAME, "react-datepicker__current-month")
+                    
+                    day = datetime.strptime(date, "%Y-%m-%d").day
+                    ordinal_suffix = get_ordinal_suffix(day)
+                    dayButton = driver.find_element(By.XPATH, f"//div[contains(@aria-label, '{monthName} {day}{ordinal_suffix}, {datetime.strptime(date, '%Y-%m-%d').year}')]")
+                    dayButton.click()
+                
+                except TimeoutException:
+                    logger.error("Date picker not found within the timeout period.")
+                    return (False, None, None, "Date picker not found.")        
+        
+                requested_time = f"{hour:02d}:{minute:02d}"
+                
+                logger.info("Setting up party time: %s", requested_time)
+                start = time.perf_counter()
+                try:
+                    timePicker = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//select[contains(@data-auto, 'timePicker')]"))
+                    )
+                except TimeoutException:
+                    logger.error("Time picker not found within the timeout period.")
+                    return (False, None, None, "Time picker not found.")
+                            
+                nearestTimeBeforeValue = None
+                nearestTimeAfterValue = None
+                min_diff = int(99999999)
+                cur_idx = -1
+                total_idx = -1
+                nearestTime_option = None
                 isExactTimeAvailable = False
-    
-            #   ===== isExactTimeAvailable = False =========
-            if isExactTimeAvailable == False:
+                try:    
+                    select_partyTime = Select(timePicker)
+                    available_values = [option.get_attribute("value") for option in select_partyTime.options]
+                    option_exists = requested_time in available_values
+                    nearestTime_option = available_values[0]
+                    if option_exists == True:
+                        select_partyTime.select_by_value(f"{requested_time}")
+                        isExactTimeAvailable = True
+                    else:
+                        for option in available_values:
+                            total_idx += 1
+                            if time_difference_in_minutes(requested_time, option) < min_diff:
+                                nearestTime_option = option
+                                min_diff = time_difference_in_minutes(requested_time, option)
+                                cur_idx = total_idx
+                                
+                        print(f"cur_idx = {cur_idx}, nearestTime_option = {nearestTime_option}")
+                        select_partyTime.select_by_value(f"{nearestTime_option}")
+                except Exception as e:
+                    logger.error("Error selecting party time: %s", e)
+                    return (False, None, None, f"Error selecting party time: {e}")
+                
+                elapsed = time.perf_counter() - start
+                logger.info("Party time set up in %.4f seconds", elapsed)
+                
+                logger.info("Locating availability button... ")
+                start = time.perf_counter()
+                findingTable_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+                )
+                findingTable_button.click()
+                elapsed = time.perf_counter() - start
+                logger.info("Clicked finding table button in %.4f seconds", elapsed)
+                
+                #============================
+                
+                availabilityButtons = []
+                
+                try:
+                    # div_buttons = driver.find_element(By.XPATH, "//div[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]")
+                    div_buttons = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//ul[contains(@class, 'styled__Wrapper-sc-1q1dpdt-5 hqigaV')]"))
+                    )
+                    
+                    WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.XPATH, ".//button[contains(@role, 'link')]"))
+                    )
+                    
+                    availabilityButtons = div_buttons.find_elements(By.XPATH, ".//button[contains(@role, 'link')]")
+                    logger.info("Found %d availability buttons.", len(availabilityButtons))
+                except Exception as e:
+                    logger.error("Availability buttons not found within the wait period.")
+                    return (False, None, None, "Availability buttons not found.")
+                
+                exact_slot = None
+                nearestTime = 0
+                isExact = False
+                isEmptyTimeButton = True
+                
+                exactTime = convert_to_am_pm( int(requested_time.split(":")[0]), int(requested_time.split(":")[1]) )
+        
                 for button in availabilityButtons:
-                    if button.text != "" and "tify" not in button.text:
-                        time_button = datetime.strptime(button.text, "%I:%M %p").strftime("%H:%M")
-                        allAvailabilityTimes.append(time_button)
-                        
-                nearestTimeBeforeValue, nearestTimeAfterValue = find_nearest_times(allAvailabilityTimes, requested_time)
-                        
-                nearestTime_string = f"Closet time before = {nearestTimeBeforeValue}, Closet time after = {nearestTimeAfterValue}"
-                return (False, None, None, f"Exact time not available. {nearestTime_string}")
-            #   ============================================
-            
-            if make_booking == False:
+                    if button.text == exactTime:
+                        exact_slot = button
+                        isEmptyTimeButton = False
+                        isExact = True
+                        break
+                if isExact == False:
+                    isExactTimeAvailable = False
+        
+                allAvailabilityTimes = []
+                #   ===== isExactTimeAvailable = False =========
+                if isExactTimeAvailable == False:
+                    for button in availabilityButtons:
+                        if button.text != "" and "tify" not in button.text:
+                            time_button = datetime.strptime(button.text, "%I:%M %p").strftime("%H:%M")
+                            allAvailabilityTimes.append(time_button)
+                            
+                    nearestTimeBeforeValue, nearestTimeAfterValue = find_nearest_times(allAvailabilityTimes, requested_time)
+                            
+                    nearestTime_string = f"Closet time before = {nearestTimeBeforeValue}, Closet time after = {nearestTimeAfterValue}"
+                    return (False, None, None, f"Exact time not available. {nearestTime_string}")
+                #   ============================================
+                
+                alternativeTime = exact_slot.text
+                logger.info("Nearest availability: %s", alternativeTime)
+                    
                 total_elapsed = time.perf_counter() - overall_start
                 logger.info("Total process time: %.4f seconds", total_elapsed)
                 return (True, None, None, "Exact time available but booking not attempted (make_booking is False).")
-                
-            if isEmptyTimeButton or exact_slot is None:
-                return (False, None, None, "No availability available")
-        
-            logger.info("Selected availability: %s", exact_slot.text)
-            exact_slot.click()
-            
-            try:
-                WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, "button[text()='Select']]"))
-                )
-                
-                reservationSelectButton = WebDriverWait(driver, 20).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[text()='Select']"))
-                )
-                reservationSelectButton.click()
             except Exception as e:
-                logger.error("Error selecting reservation: %s", e)
-            
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'firstName')]"))
-            )
-        
-            error_msg = ""
-            try:
-                booking_result, booking_info = receiving_reservation(driver, first_name, last_name, phone_number, email)
-                if booking_result:
-                    booked = True
-                    confirmation_url = booking_info
-                    logger.info("Booking successful. CancelReservation URL: %s", confirmation_url)
-                else:
-                    error_msg = booking_info
-                    logger.error("Booking failed: %s", error_msg)
-            except Exception as e:
-                logger.exception("Unexpected error during reservation process")
+                logger.exception("Unexpected error during availability checking process:")
                 return (False, None, None, f"Unexpected error: {e}")
-        
-            total_elapsed = time.perf_counter() - overall_start
-            logger.info("Total booking process time: %.4f seconds", total_elapsed)
-            return (booked, confirmation_url if booked else None, None, error_msg)
-        except Exception as e:
-            logger.exception("Unexpected error during booking process")
-            return (False, None, None, f"Unexpected error: {e}")
-        
     finally:
         if driver is not None:
             driver.quit()
@@ -822,10 +979,10 @@ if __name__ == '__main__':
     RESTAURANT_ID = "https://www.opentable.com/restref/client?rid=1328581&restref=1328581&partysize=2&datetime=2025-03-04T19%3A00&lang=en-US&r3uid=ATDC2IO_2-&color=1&modal=true"
 
     result = make_reservation_external(
-        date="2025-05-12",
-        hour=17,
-        minute=30,
-        party_size="7",
+        date="2025-03-12",
+        hour=2,
+        minute=29,
+        party_size="5",
         first_name="bvvdlabsdlasd",
         last_name="alsdbavsdlb",
         email="tesht2137j56476@dinedaiserver.online",
